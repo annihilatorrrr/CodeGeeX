@@ -75,15 +75,12 @@ def main():
     state_dict = torch.load(args.load_ckpt_path, map_location="cpu")
 
     print(f"Spliting ckpt into {args.target_tensor_model_parallel_size} parts...")
-    output_state_dict = []
-    for i in range(args.target_tensor_model_parallel_size):
-        output_state_dict.append({})
-    
+    output_state_dict = [{} for _ in range(args.target_tensor_model_parallel_size)]
     print("Converting Embedding layers...")
     word_embeddings = state_dict['module']['language_model']['embedding']['word_embeddings']['weight']
     position_embeddings = state_dict['module']['language_model']['embedding']['position_embeddings']['weight']
     out_word_embeddings = torch.chunk(word_embeddings, args.target_tensor_model_parallel_size, dim=0)
-    
+
     for i in range(args.target_tensor_model_parallel_size):
         pos_emb_dict = get_element_from_dict_by_path(
             output_state_dict[i], "module.language_model.embedding.position_embeddings"
@@ -94,17 +91,17 @@ def main():
             output_state_dict[i], "module.language_model.embedding.word_embeddings"
         )
         word_emb_dict["weight"] = out_word_embeddings[i]
-        
+
     print("Converting QueryEmbedding layers...")
     query_embeddings = state_dict['module']['language_model']['topQueryEmbedding']['top_query_embeddings']['weight']
     out_query_embeddings = torch.chunk(query_embeddings, args.target_tensor_model_parallel_size, dim=0)
-    
+
     for i in range(args.target_tensor_model_parallel_size):
         query_emb_dict = get_element_from_dict_by_path(
             output_state_dict[i], "module.language_model.topQueryEmbedding.top_query_embeddings"
         )
         query_emb_dict["weight"] = out_query_embeddings[i]
-    
+
     print("Converting Transformer layers...")
     for layer_name in state_dict['module']['language_model']['transformer'].keys():
         params = state_dict['module']['language_model']['transformer'][layer_name]
@@ -121,19 +118,14 @@ def main():
             else:
                 params = torch.chunk(params, args.target_tensor_model_parallel_size, dim=1)
         elif "bias" in layer_name:
-            if "dense" not in layer_name or "mlp" in layer_name:
-                if "4h_to_h" in layer_name:
-                    pass
-                else:
-                    params = torch.chunk(params, args.target_tensor_model_parallel_size, dim=0)
-                
+            if (
+                "dense" not in layer_name or "mlp" in layer_name
+            ) and "4h_to_h" not in layer_name:
+                params = torch.chunk(params, args.target_tensor_model_parallel_size, dim=0)
+
         for i in range(args.target_tensor_model_parallel_size):
             params_dict = get_element_from_dict_by_path(output_state_dict[i], "module.language_model.transformer")
-            if type(params) is tuple:
-                params_dict[layer_name] = params[i]
-            else:
-                params_dict[layer_name] = params
-                
+            params_dict[layer_name] = params[i] if type(params) is tuple else params
     os.makedirs(args.save_ckpt_path, exist_ok=True)
     for rank in range(args.target_tensor_model_parallel_size):
         save_ckpt_path = os.path.join(args.save_ckpt_path, f"mp_rank_{rank:02d}_model_states.pt")

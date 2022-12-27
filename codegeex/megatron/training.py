@@ -77,7 +77,7 @@ def print_datetime(string):
     """Note that this call will sync across all ranks."""
     torch.distributed.barrier()
     time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print_rank_0("[" + string + "] datetime: {} ".format(time_str))
+    print_rank_0(f"[{string}" + f"] datetime: {time_str} ")
 
 
 def compress_setup(args, model, optimizer):
@@ -139,7 +139,7 @@ def pretrain(
     timers = get_timers()
 
     if args.local_rank == 0 and args.save is not None:
-        print(f"Creating output dir ...")
+        print("Creating output dir ...")
         os.makedirs(args.save, exist_ok=True)
 
     if args.deepspeed:
@@ -253,7 +253,7 @@ def update_train_iters(args):
         iterations += (args.train_samples - consumed_samples) // args.global_batch_size
         args.train_iters = iterations
 
-    print_rank_0("setting training iterations to {}".format(args.train_iters))
+    print_rank_0(f"setting training iterations to {args.train_iters}")
 
 
 def get_model(model_provider_func):
@@ -294,21 +294,19 @@ def get_model(model_provider_func):
     # Print number of parameters.
     if mpu.get_data_parallel_rank() == 0:
         print(
-            " > number of parameters on (tensor, pipeline) "
-            "model parallel rank ({}, {}): {}".format(
-                mpu.get_tensor_model_parallel_rank(),
-                mpu.get_pipeline_model_parallel_rank(),
-                sum(
-                    [
+            (
+                " > number of parameters on (tensor, pipeline) "
+                "model parallel rank ({}, {}): {}".format(
+                    mpu.get_tensor_model_parallel_rank(),
+                    mpu.get_pipeline_model_parallel_rank(),
+                    sum(
                         sum(
-                            [
-                                p.ds_numel if hasattr(p, "ds_id") else p.nelement()
-                                for p in model_module.parameters()
-                            ]
+                            p.ds_numel if hasattr(p, "ds_id") else p.nelement()
+                            for p in model_module.parameters()
                         )
                         for model_module in model
-                    ]
-                ),
+                    ),
+                )
             ),
             flush=True,
         )
@@ -317,16 +315,16 @@ def get_model(model_provider_func):
         return model
 
     # GPU allocation.
-    print(f" > moving model to GPU ...", flush=True)
+    print(" > moving model to GPU ...", flush=True)
     for model_module in model:
         model_module.cuda(torch.cuda.current_device())
-    print(f" > moving to GPU done", flush=True)
+    print(" > moving to GPU done", flush=True)
 
     # Fp16 conversion.
     if args.fp16 or args.bf16:
-        print(f" > converting model to fp16 ...", flush=True)
+        print(" > converting model to fp16 ...", flush=True)
         model = [Float16Module(model_module, args) for model_module in model]
-        print(f" > converting to fp16 done", flush=True)
+        print(" > converting to fp16 done", flush=True)
 
     if args.DDP_impl == "torch":
         i = torch.cuda.current_device()
@@ -342,7 +340,7 @@ def get_model(model_provider_func):
         return model
 
     if args.DDP_impl == "local":
-        print(f" > creating DDP model ...", flush=True)
+        print(" > creating DDP model ...", flush=True)
         model = [
             LocalDDP(
                 model_module,
@@ -351,11 +349,11 @@ def get_model(model_provider_func):
             )
             for model_module in model
         ]
-        print(f" > creating DDP model done", flush=True)
+        print(" > creating DDP model done", flush=True)
         return model
 
     raise NotImplementedError(
-        "Unknown DDP implementation specified: {}. " "Exiting.".format(args.DDP_impl)
+        f"Unknown DDP implementation specified: {args.DDP_impl}. Exiting."
     )
 
 
@@ -388,7 +386,7 @@ def get_learning_rate_scheduler(optimizer):
     else:
         raise Exception("either train-iters or train-samples should be provided.")
 
-    lr_scheduler = AnnealingLR(
+    return AnnealingLR(
         optimizer,
         max_lr=args.lr,
         min_lr=args.min_lr,
@@ -398,8 +396,6 @@ def get_learning_rate_scheduler(optimizer):
         use_checkpoint_lr_scheduler=args.use_checkpoint_lr_scheduler,
         override_lr_scheduler=args.override_lr_scheduler,
     )
-
-    return lr_scheduler
 
 
 def setup_model_and_optimizer(model_provider_func):
@@ -816,25 +812,25 @@ def training_log(
             )
 
         # only the last rank process has a non-None _GLOBAL_TENSORBOARD_WRITER
-        if writer and is_last_rank():
-            if args.log_timers_to_tensorboard:
-                writer.add_scalar(
-                    "iteration-time/iteration-time",
-                    elapsed_time_per_iteration,
-                    iteration,
-                )
-                writer.add_scalar(
-                    "iteration-time/iteration-time vs samples",
-                    elapsed_time_per_iteration,
-                    args.consumed_train_samples,
-                )
-                writer.add_scalar(
-                    "iteration-time/iteration-time vs tokens",
-                    elapsed_time_per_iteration,
-                    args.consumed_train_tokens,
-                )
-        log_string = "==> iteration {:8d}/{:8d} |".format(iteration, args.train_iters)
-        log_string += " consumed samples: {:12d} |".format(args.consumed_train_samples)
+        if writer and is_last_rank() and args.log_timers_to_tensorboard:
+            writer.add_scalar(
+                "iteration-time/iteration-time",
+                elapsed_time_per_iteration,
+                iteration,
+            )
+            writer.add_scalar(
+                "iteration-time/iteration-time vs samples",
+                elapsed_time_per_iteration,
+                args.consumed_train_samples,
+            )
+            writer.add_scalar(
+                "iteration-time/iteration-time vs tokens",
+                elapsed_time_per_iteration,
+                args.consumed_train_tokens,
+            )
+        log_string = "==> iteration {:8d}/{:8d} |".format(
+            iteration, args.train_iters
+        ) + " consumed samples: {:12d} |".format(args.consumed_train_samples)
         log_string += " consumed tokens: {:12d} |".format(args.consumed_train_tokens)
         log_string += " elapsed time per iteration (ms): {:.1f} |".format(
             elapsed_time_per_iteration * 1000.0
@@ -926,7 +922,7 @@ def train(
     timers("interval-time").start()
     print_datetime("before the start of training step")
     report_memory_flag = True
-    
+
     while iteration < args.train_iters and (
         args.train_tokens is None or args.consumed_train_tokens < args.train_tokens
     ):
@@ -983,7 +979,7 @@ def train(
 
         # Evaluation
         if args.eval_interval and iteration % args.eval_interval == 0 and args.do_valid:
-            prefix = "iteration {}".format(iteration)
+            prefix = f"iteration {iteration}"
             if args.co_evaluation:
                 for key, value in valid_data_iterator.items():
                     evaluate_and_print_results(
@@ -1005,11 +1001,10 @@ def train(
             train_time = (time.time() - _TRAIN_START_TIME) / 60.0
             done_cuda = torch.cuda.IntTensor([train_time > args.exit_duration_in_mins])
             torch.distributed.all_reduce(done_cuda, op=torch.distributed.ReduceOp.MAX)
-            done = done_cuda.item()
-            if done:
+            if done := done_cuda.item():
                 if not saved_checkpoint:
                     save_checkpoint_and_time(iteration, model, optimizer, lr_scheduler)
-                print_datetime("exiting program after {} minutes".format(train_time))
+                print_datetime(f"exiting program after {train_time} minutes")
                 sys.exit()
 
         # Exiting based on iterations
@@ -1017,7 +1012,7 @@ def train(
             if not saved_checkpoint:
                 save_checkpoint_and_time(iteration, model, optimizer, lr_scheduler)
             torch.distributed.barrier()
-            print_datetime("exiting program at iteration {}".format(iteration))
+            print_datetime(f"exiting program at iteration {iteration}")
             sys.exit()
 
     return iteration
@@ -1038,7 +1033,7 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
         while iteration < args.eval_iters:
             iteration += 1
             if verbose and iteration % args.log_interval == 0:
-                print_rank_0("Evaluating iter {}/{}".format(iteration, args.eval_iters))
+                print_rank_0(f"Evaluating iter {iteration}/{args.eval_iters}")
 
             if mpu.get_pipeline_model_parallel_world_size() > 1:
                 if args.virtual_pipeline_model_parallel_size is not None:
@@ -1085,8 +1080,8 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
     for model_module in model:
         model_module.train()
 
-    for key in total_loss_dict:
-        total_loss_dict[key] /= args.eval_iters * get_num_microbatches()
+    for value in total_loss_dict.values():
+        value /= args.eval_iters * get_num_microbatches()
 
     return total_loss_dict
 
@@ -1100,19 +1095,15 @@ def evaluate_and_print_results(
 
     total_loss_dict = evaluate(forward_step_func, data_iterator, model, verbose)
     if tag is None:
-        string = " validation loss at {} | ".format(prefix)
+        string = f" validation loss at {prefix} | "
     else:
-        string = " validation loss for {} at {} | ".format(tag, prefix)
+        string = f" validation loss for {tag} at {prefix} | "
     for key in total_loss_dict:
         string += "{} value: {:.6E} | ".format(key, total_loss_dict[key].item())
         ppl = math.exp(min(20, total_loss_dict[key].item()))
         string += "{} PPL: {:.6E} | ".format(key, ppl)
 
-        if tag is not None:
-            display_key = tag + "-" + key
-        else:
-            display_key = key
-
+        display_key = f"{tag}-{key}" if tag is not None else key
         if args.wandb_logging and is_last_rank():
             wandb.log(
                 {
@@ -1167,19 +1158,15 @@ def evaluate_and_print_results_gold(
 
     total_loss_dict = evaluate(forward_step_func, data_iterator, model, verbose)
     if tag is None:
-        string = " validation loss (gold) at {} | ".format(prefix)
+        string = f" validation loss (gold) at {prefix} | "
     else:
-        string = " validation loss (gold) for {} at {} | ".format(tag, prefix)
+        string = f" validation loss (gold) for {tag} at {prefix} | "
     for key in total_loss_dict:
         string += "{} value: {:.6E} | ".format(key, total_loss_dict[key].item())
         ppl = math.exp(min(20, total_loss_dict[key].item()))
         string += "{} PPL: {:.6E} | ".format(key, ppl)
 
-        if tag is not None:
-            display_key = tag + "-" + key
-        else:
-            display_key = key
-
+        display_key = f"{tag}-{key}" if tag is not None else key
         if args.wandb_logging and is_last_rank():
             wandb.log(
                 {
@@ -1227,8 +1214,7 @@ def evaluate_and_print_results_gold(
 
 def cyclic_iter(iter):
     while True:
-        for x in iter:
-            yield x
+        yield from iter
 
 
 def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provider):
@@ -1258,10 +1244,7 @@ def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provid
     if mpu.get_tensor_model_parallel_rank() == 0:
 
         # Number of train/valid/test samples.
-        if args.train_samples:
-            train_samples = args.train_samples
-        else:
-            train_samples = args.train_iters * args.global_batch_size
+        train_samples = args.train_samples or args.train_iters * args.global_batch_size
         eval_iters = (args.train_iters // args.eval_interval + 1) * args.eval_iters
         test_iters = args.eval_iters
         train_val_test_num_samples = [
@@ -1270,9 +1253,9 @@ def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provid
             test_iters * args.global_batch_size,
         ]
         print_rank_0(" > datasets target sizes (minimum size):")
-        print_rank_0("    train:      {}".format(train_val_test_num_samples[0]))
-        print_rank_0("    validation: {}".format(train_val_test_num_samples[1]))
-        print_rank_0("    test:       {}".format(train_val_test_num_samples[2]))
+        print_rank_0(f"    train:      {train_val_test_num_samples[0]}")
+        print_rank_0(f"    validation: {train_val_test_num_samples[1]}")
+        print_rank_0(f"    test:       {train_val_test_num_samples[2]}")
 
         # Build the datasets.
         train_ds, valid_ds, test_ds = build_train_valid_test_datasets_provider(
@@ -1284,20 +1267,22 @@ def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provid
             train_ds, args.consumed_train_samples
         )
         if args.co_evaluation:
-            valid_dataloader = {}
-            for key, value in valid_ds.items():
-                valid_dataloader[key] = build_pretraining_data_loader(
+            valid_dataloader = {
+                key: build_pretraining_data_loader(
                     value, args.consumed_valid_samples
                 )
+                for key, value in valid_ds.items()
+            }
         else:
             valid_dataloader = build_pretraining_data_loader(
                 valid_ds, args.consumed_valid_samples
             )
         if args.co_evaluation:
             if test_ds is not None:
-                test_dataloader = {}
-                for key, value in test_ds.items():
-                    test_dataloader[key] = build_pretraining_data_loader(value, 0)
+                test_dataloader = {
+                    key: build_pretraining_data_loader(value, 0)
+                    for key, value in test_ds.items()
+                }
             else:
                 test_dataloader = None
         else:
@@ -1335,40 +1320,40 @@ def build_train_valid_test_data_iterators(build_train_valid_test_datasets_provid
     else:
         train_data_iterator = None
 
-    if valid_dataloader is not None:
-        if args.co_evaluation:
-            valid_data_iterator = {}
-            for key, value in valid_dataloader.items():
-                valid_data_iterator[key] = (
-                    iter(value)
-                    if dl_type == "single"
-                    else iter(cyclic_iter(value))
-                )
-        else:
-            valid_data_iterator = (
-                iter(valid_dataloader)
-                if dl_type == "single"
-                else iter(cyclic_iter(valid_dataloader))
-            )
-    else:
+    if valid_dataloader is None:
         valid_data_iterator = None
 
-    if test_dataloader is not None:
-        if args.co_evaluation:
-            test_data_iterator = {}
-            for key, value in test_dataloader.items():
-                test_data_iterator[key] = (
-                    iter(value)
-                    if dl_type == "single"
-                    else iter(cyclic_iter(value))
-                )
-        else:
-            test_data_iterator = (
-                iter(test_dataloader)
+    elif args.co_evaluation:
+        valid_data_iterator = {
+            key: (
+                iter(value)
                 if dl_type == "single"
-                else iter(cyclic_iter(test_dataloader))
+                else iter(cyclic_iter(value))
             )
+            for key, value in valid_dataloader.items()
+        }
     else:
+        valid_data_iterator = (
+            iter(valid_dataloader)
+            if dl_type == "single"
+            else iter(cyclic_iter(valid_dataloader))
+        )
+    if test_dataloader is None:
         test_data_iterator = None
 
+    elif args.co_evaluation:
+        test_data_iterator = {
+            key: (
+                iter(value)
+                if dl_type == "single"
+                else iter(cyclic_iter(value))
+            )
+            for key, value in test_dataloader.items()
+        }
+    else:
+        test_data_iterator = (
+            iter(test_dataloader)
+            if dl_type == "single"
+            else iter(cyclic_iter(test_dataloader))
+        )
     return train_data_iterator, valid_data_iterator, test_data_iterator

@@ -5,32 +5,32 @@ from typing import *
 
 
 LANGUAGE_TAG = {
-    "c++"          : "// language: C++",
-    "cpp"          : "// language: C++",
-    "c"            : "// language: C",
-    "c#"           : "// language: C#",
-    "cuda"         : "// language: Cuda",
-    "objective-c"  : "// language: Objective-C",
+    "c++": "// language: C++",
+    "cpp": "// language: C++",
+    "c": "// language: C",
+    "c#": "// language: C#",
+    "cuda": "// language: Cuda",
+    "objective-c": "// language: Objective-C",
     "objective-c++": "// language: Objective-C++",
-    "python"       : "# language: Python",
-    "java"         : "// language: Java",
-    "scala"        : "// language: Scala",
-    "tex"          : f"% language: TeX",
-    "html"         : "<!--language: HTML-->",
-    "php"          : "// language: PHP",
-    "js"           : "// language: JavaScript",
-    "javascript"   : "// language: JavaScript",
-    "typescript"   : "// language: TypeScript",
-    "go"           : "// language: Go",
-    "shell"        : "# language: Shell",
-    "rust"         : "// language: Rust",
-    "css"          : "/* language: CSS */",
-    "sql"          : "-- language: SQL",
-    "kotlin"       : "// language: Kotlin",
-    "pascal"       : "// language: Pascal",
-    "r"            : "# language: R",
-    "fortran"      : "!language: Fortran",
-    "lean"         : "-- language: Lean",
+    "python": "# language: Python",
+    "java": "// language: Java",
+    "scala": "// language: Scala",
+    "tex": "% language: TeX",
+    "html": "<!--language: HTML-->",
+    "php": "// language: PHP",
+    "js": "// language: JavaScript",
+    "javascript": "// language: JavaScript",
+    "typescript": "// language: TypeScript",
+    "go": "// language: Go",
+    "shell": "# language: Shell",
+    "rust": "// language: Rust",
+    "css": "/* language: CSS */",
+    "sql": "-- language: SQL",
+    "kotlin": "// language: Kotlin",
+    "pascal": "// language: Pascal",
+    "r": "# language: R",
+    "fortran": "!language: Fortran",
+    "lean": "-- language: Lean",
 }
 
 
@@ -55,10 +55,7 @@ def write_jsonl(filename: str, data: Iterable[Dict], append: bool = False):
     """
     Writes an iterable of dictionaries to jsonl
     """
-    if append:
-        mode = "ab"
-    else:
-        mode = "wb"
+    mode = "ab" if append else "wb"
     filename = os.path.expanduser(filename)
     if filename.endswith(".gz"):
         with open(filename, mode) as fp:
